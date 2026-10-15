@@ -1,0 +1,104 @@
+# Default/schema values. Override per tenant via values-<tenant>.yaml.
+# See ../../README.md and ../../docs/design-review.md for the reasoning.
+# values.schema.json enforces types/ranges; templates/_helpers.tpl enforces
+# the cross-field rules. The cluster-side ValidatingAdmissionPolicy in
+# ../../platform/admission/ enforces the same guardrails for anything that
+# doesn't come through this chart.
+
+tenant:
+  # Platform tenant ID, canonical form APP-<number>-UC<nn> (e.g.
+  # APP-1234-UC01). One tenant ID = one application use case = one
+  # isolation unit. Resource names use its lowercase form.
+  id: "REPLACE_ME"
+
+# Kubernetes namespace this tenant's objects live in. Must already exist
+# (created by tenant onboarding) and be dedicated to this tenant.
+namespace: "REPLACE_ME"
+
+serviceAccount:
+  # The tenant's *existing* ServiceAccount, already labeled/annotated for
+  # Azure Workload Identity by onboarding. Only referenced here.
+  name: sb-consumer-sa
+
+identity:
+  # Client ID of the tenant's user-assigned managed identity. KEDA's
+  # azure-workload provider always runs as the keda-operator
+  # ServiceAccount; identityId makes it request a token for THIS identity
+  # instead of its own. That only works if the identity has a federated
+  # credential for the keda-operator ServiceAccount (created once per
+  # tenant by terraform/tenant-keda-identity; take this value from its
+  # client_id output). The admission policy checks this value
+  # against the namespace's platform annotation, so one tenant cannot
+  # point KEDA at another tenant's identity.
+  clientId: "REPLACE_ME"
+
+serviceBus:
+  # Short namespace name, e.g. sb-daas. NOT the FQDN: KEDA appends the
+  # endpoint suffix itself (<namespace>.servicebus.windows.net).
+  namespace: "REPLACE_ME"
+  # queue | topic
+  entityType: queue
+  # entityType=queue: q-<tenantid>-<purpose>, e.g. q-app-1234-uc01-orders
+  queueName: ""
+  # entityType=topic: t-<tenantid>-<purpose> + sub-<consumer>. KEDA scales on
+  # the subscription's backlog, never on the topic.
+  topicName: ""
+  subscriptionName: ""
+
+keda:
+  # Defaults: so-<deploymentName> / ta-<deploymentName>
+  scaledObjectName: ""
+  triggerAuthenticationName: ""
+
+# Design defaults ("Recommended scaling defaults").
+scaling:
+  messageCount: 10
+  activationMessageCount: 0
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  pollingIntervalSeconds: 30
+  cooldownPeriodSeconds: 300
+
+# Platform guardrails. Changing these in a tenant values file does not
+# loosen the cluster admission policy, which holds the authoritative caps.
+platformLimits:
+  maxReplicaCap: 50
+  maxMessageCount: 1000
+  minPollingIntervalSeconds: 15
+
+workload:
+  # If true, create a placeholder consumer Deployment; otherwise
+  # deploymentName must name an existing Deployment in the namespace.
+  create: true
+  deploymentName: sb-consumer
+  # Pin by digest in real deployments.
+  image: "REPLACE_ME"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+networkPolicy:
+  enabled: true
+  # Private Endpoint IP(s)/subnet of the Service Bus namespace. Required
+  # unless allowPublicServiceBusEgress is true.
+  serviceBusEgressCIDRs: []
+  # Option B only (public endpoint + Entra-only auth): allow 443/5671 to
+  # public addresses. Private ranges stay blocked either way.
+  allowPublicServiceBusEgress: false
+  # Workload identity exchanges its federated token with Microsoft Entra ID
+  # (login.microsoftonline.com) over 443. Without this the pod can't
+  # authenticate even when Service Bus itself is reachable. Plain
+  # NetworkPolicy can't match FQDNs, so this allows 443 to public addresses
+  # only; restrict further with Azure Firewall or a Cilium FQDN policy.
+  allowEntraIdEgress: true
+  # Address ranges always excluded from the public-egress rules above, so
+  # tenant pods can't reach other tenants' pods/services through them.
+  privateRanges:
+    - 10.0.0.0/8
+    - 172.16.0.0/12
+    - 192.168.0.0/16
+    - 100.64.0.0/10

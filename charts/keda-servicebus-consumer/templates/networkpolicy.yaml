@@ -1,0 +1,99 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+# Default-deny for the tenant namespace, then explicit allows for DNS, Entra
+# ID (token exchange) and Service Bus. See README section 2.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "keda-servicebus-consumer.tenantSlug" . }}-default-deny
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "keda-servicebus-consumer.tenantSlug" . }}-allow-dns
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # Cluster DNS only, not port 53 on every pod in every namespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "keda-servicebus-consumer.tenantSlug" . }}-allow-servicebus-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        {{- range $np.serviceBusEgressCIDRs }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+        {{- end }}
+        {{- if $np.allowPublicServiceBusEgress }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml $np.privateRanges | nindent 14 }}
+        {{- end }}
+      # TLS only: AMQP over TLS (5671) and AMQP-over-WebSockets/HTTPS (443).
+      # Plain AMQP (5672) is not allowed.
+      ports:
+        - protocol: TCP
+          port: 5671
+        - protocol: TCP
+          port: 443
+{{- if $np.allowEntraIdEgress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "keda-servicebus-consumer.tenantSlug" . }}-allow-entra-id-egress
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              {{- toYaml $np.privateRanges | nindent 14 }}
+      ports:
+        - protocol: TCP
+          port: 443
+{{- end }}
+{{- end }}

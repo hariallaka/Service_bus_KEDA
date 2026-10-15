@@ -1,0 +1,74 @@
+name: KEDA + Service Bus offline checks
+
+# Runs the repository's offline guardrail tests: no Azure or cluster access.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        module: [servicebus-tenant, tenant-keda-identity]
+    defaults:
+      run:
+        working-directory: terraform/${{ matrix.module }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.8"
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - run: terraform test
+
+  helm-and-admission-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+        with:
+          version: "v3.16.2"
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: platform/admission/policytest/go.mod
+      - name: Lint chart for both example tenants
+        working-directory: charts/keda-servicebus-consumer
+        run: |
+          helm lint . -f values-tenant-a.yaml
+          helm lint . -f values-tenant-b.yaml
+      - name: Rendered manifests match committed admission-policy fixtures
+        working-directory: platform/admission/policytest
+        run: |
+          chart=../../../charts/keda-servicebus-consumer
+          helm template app-1234-uc01-orders "$chart" -f "$chart/values-tenant-a.yaml" | diff -u testdata/rendered-tenant-a.yaml -
+          helm template app-5678-uc02-billing "$chart" -f "$chart/values-tenant-b.yaml" | diff -u testdata/rendered-tenant-b.yaml -
+      - name: Admission policy tests
+        working-directory: platform/admission/policytest
+        run: go test ./...
+
+  registry:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply migration and run tests
+        working-directory: registry/tests
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: psql -v ON_ERROR_STOP=1 -q -f ../001_servicebus_keda.sql -f 001_servicebus_keda_test.sql

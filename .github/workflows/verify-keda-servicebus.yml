@@ -1,0 +1,97 @@
+name: Verify KEDA + Service Bus scaling
+
+# Manual, on-demand smoke test: sends test messages to a tenant's Service
+# Bus queue and confirms the corresponding AKS Deployment scales up and
+# back down via KEDA. Does not create/modify any Azure or Kubernetes
+# resources - see scripts/verify-keda-scaling.sh.
+on:
+  workflow_dispatch:
+    inputs:
+      aks_resource_group:
+        description: "Resource group containing the target AKS cluster"
+        required: true
+      aks_cluster_name:
+        description: "Target AKS cluster name"
+        required: true
+      tenant_namespace:
+        description: "Tenant's Kubernetes namespace (e.g. tenant-app-1234-uc01)"
+        required: true
+      deployment_name:
+        description: "Deployment KEDA scales (e.g. order-processor)"
+        required: true
+      servicebus_namespace_fqdn:
+        description: "Service Bus namespace FQDN (e.g. myns.servicebus.windows.net)"
+        required: true
+      queue_name:
+        description: "Service Bus queue to send test messages to (set this OR topic_name)"
+        required: false
+        default: ""
+      topic_name:
+        description: "Service Bus topic to send test messages to (set this OR queue_name)"
+        required: false
+        default: ""
+      message_count:
+        description: "Number of test messages to send"
+        required: false
+        default: "20"
+
+permissions:
+  id-token: write   # required for OIDC login to Azure - no stored credentials
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Federated OIDC login. Configure a federated credential on a
+      # dedicated CI app registration/managed identity, scoped only to
+      # this repo+workflow, holding only:
+      #   - Azure Service Bus Data Sender on the test queue/topic (to send
+      #     messages), and
+      #   - Azure Kubernetes Service Cluster User Role (or equivalent
+      #     least-privilege read RBAC) to fetch the kubeconfig.
+      # No connection strings or long-lived secrets are used.
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        env:
+          AKS_RG: ${{ github.event.inputs.aks_resource_group }}
+          AKS_NAME: ${{ github.event.inputs.aks_cluster_name }}
+        run: |
+          az aks get-credentials --resource-group "${AKS_RG}" --name "${AKS_NAME}" --overwrite-existing
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install verification script dependencies
+        run: pip install -r scripts/requirements.txt
+
+      # Inputs are passed through env, not interpolated into the script, so
+      # a crafted input value can't inject shell commands.
+      - name: Run KEDA scaling verification
+        env:
+          TENANT_NAMESPACE: ${{ github.event.inputs.tenant_namespace }}
+          DEPLOYMENT_NAME: ${{ github.event.inputs.deployment_name }}
+          SB_FQDN: ${{ github.event.inputs.servicebus_namespace_fqdn }}
+          QUEUE_NAME: ${{ github.event.inputs.queue_name }}
+          TOPIC_NAME: ${{ github.event.inputs.topic_name }}
+          MESSAGE_COUNT: ${{ github.event.inputs.message_count }}
+        run: |
+          if [[ -n "${QUEUE_NAME}" ]]; then target=(-q "${QUEUE_NAME}"); else target=(-t "${TOPIC_NAME}"); fi
+          chmod +x scripts/verify-keda-scaling.sh
+          scripts/verify-keda-scaling.sh \
+            -n "${TENANT_NAMESPACE}" \
+            -d "${DEPLOYMENT_NAME}" \
+            -s "${SB_FQDN}" \
+            "${target[@]}" \
+            -c "${MESSAGE_COUNT}"

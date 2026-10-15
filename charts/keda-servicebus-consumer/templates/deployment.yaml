@@ -1,0 +1,57 @@
+{{- if .Values.workload.create }}
+# Placeholder consumer Deployment so the ScaledObject has something to scale
+# end-to-end (see scripts/verify-keda-scaling.sh). Replace workload.image
+# with your real consumer. Runs as the tenant's pre-existing ServiceAccount;
+# the azure.workload.identity/use label makes the AKS workload identity
+# webhook inject that ServiceAccount's federated token and AZURE_CLIENT_ID.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.workload.deploymentName }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+    app: {{ .Values.workload.deploymentName }}
+spec:
+  # replicas is deliberately omitted: KEDA/HPA owns it, and setting it here
+  # would reset the replica count on every helm upgrade.
+  selector:
+    matchLabels:
+      app: {{ .Values.workload.deploymentName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.workload.deploymentName }}
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      # The workload identity webhook mounts its own projected token; the
+      # Kubernetes API token isn't needed by a Service Bus consumer.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: consumer
+          image: {{ .Values.workload.image }}
+          env:
+            - name: SERVICEBUS_FQDN
+              value: {{ printf "%s.servicebus.windows.net" .Values.serviceBus.namespace | quote }}
+            {{- if eq .Values.serviceBus.entityType "queue" }}
+            - name: SERVICEBUS_QUEUE_NAME
+              value: {{ .Values.serviceBus.queueName | quote }}
+            {{- else }}
+            - name: SERVICEBUS_TOPIC_NAME
+              value: {{ .Values.serviceBus.topicName | quote }}
+            - name: SERVICEBUS_SUBSCRIPTION_NAME
+              value: {{ .Values.serviceBus.subscriptionName | quote }}
+            {{- end }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.workload.resources | nindent 12 }}
+{{- end }}

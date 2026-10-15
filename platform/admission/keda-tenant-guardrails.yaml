@@ -1,0 +1,163 @@
+# Cluster-side guardrails for KEDA + Service Bus in tenant namespaces.
+# Owned and applied by the platform team (not by tenant Helm releases).
+# Requires Kubernetes >= 1.30 (ValidatingAdmissionPolicy GA).
+#
+# Why this exists: KEDA's azure-workload provider always authenticates as the
+# keda-operator ServiceAccount. For per-tenant identities to work, every
+# tenant's managed identity is federated with that one ServiceAccount, and a
+# TriggerAuthentication picks which identity to use via identityId. Without
+# admission control, tenant B could create a TriggerAuthentication with
+# tenant A's client ID (client IDs are not secrets) and have KEDA act as
+# tenant A. These policies bind each tenant namespace to the identity and
+# entity prefix that onboarding recorded on the Namespace object.
+#
+# Onboarding contract, set on each tenant Namespace by the platform. Tenants
+# must not have RBAC to update Namespace objects:
+#   labels:
+#     platform.io/tenant: <tenant ID, canonical APP-<number>-UC<nn>, e.g. APP-1234-UC01>
+#   annotations:
+#     platform.io/workload-identity-client-id: <tenant UAMI client ID>
+#
+# Tenants must also have no RBAC on ClusterTriggerAuthentication.
+#
+# The approved namespace list and caps below mirror the platform limits in
+# the registry and charts/keda-servicebus-consumer/values.yaml; keep them in
+# sync.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: keda-tenant-triggerauthentication
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["keda.sh"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["triggerauthentications"]
+  variables:
+    - name: expectedClientId
+      expression: >-
+        has(namespaceObject.metadata.annotations) &&
+        'platform.io/workload-identity-client-id' in namespaceObject.metadata.annotations
+        ? namespaceObject.metadata.annotations['platform.io/workload-identity-client-id'] : ''
+  validations:
+    - expression: >-
+        has(object.spec.podIdentity) && object.spec.podIdentity.provider == 'azure-workload'
+      message: "Tenant TriggerAuthentications must use podIdentity.provider: azure-workload."
+    - expression: >-
+        !has(object.spec.secretTargetRef) && !has(object.spec.env) &&
+        !has(object.spec.configMapTargetRef) && !has(object.spec.hashiCorpVault) &&
+        !has(object.spec.azureKeyVault) && !has(object.spec.awsSecretManager) &&
+        !has(object.spec.gcpSecretManager) && !has(object.spec.boundServiceAccountToken)
+      message: "Secret-based KEDA auth is not allowed in tenant namespaces (SAS/connection strings bypass entity-scoped RBAC)."
+    - expression: >-
+        variables.expectedClientId != '' &&
+        has(object.spec.podIdentity) && has(object.spec.podIdentity.identityId) &&
+        object.spec.podIdentity.identityId.lowerAscii() == variables.expectedClientId.lowerAscii()
+      messageExpression: >-
+        'podIdentity.identityId must equal this namespace\'s onboarded identity (' +
+        (variables.expectedClientId == '' ? 'none recorded on the Namespace' : variables.expectedClientId) + ').'
+    - expression: >-
+        !has(object.spec.podIdentity) ||
+        (!has(object.spec.podIdentity.identityTenantId) && !has(object.spec.podIdentity.identityAuthorityHost))
+      message: "Cross-tenant/cross-cloud identity overrides are not allowed."
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: keda-tenant-triggerauthentication
+spec:
+  policyName: keda-tenant-triggerauthentication
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: platform.io/tenant
+          operator: Exists
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: keda-tenant-scaling
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["keda.sh"]
+        apiVersions: ["*"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["scaledobjects", "scaledjobs"]
+  variables:
+    - name: tenantId
+      expression: "namespaceObject.metadata.labels['platform.io/tenant']"
+    # Lowercase form used inside entity names (q-app-1234-uc01-<purpose>).
+    - name: tenant
+      expression: "variables.tenantId.lowerAscii()"
+    - name: approvedNamespaces
+      expression: "['sb-daas']"
+    - name: maxReplicaCap
+      expression: "50"
+    - name: maxMessageCount
+      expression: "1000"
+    - name: minPollingInterval
+      expression: "15"
+    - name: sbTriggers
+      expression: "object.spec.triggers.filter(t, t.type == 'azure-servicebus')"
+  validations:
+    # A malformed label (e.g. "APP") would turn the prefix checks below into
+    # q-app-*, matching every tenant's entities.
+    - expression: "variables.tenantId.matches('^APP-[0-9]{1,8}-UC[0-9]{2}$')"
+      messageExpression: "'Namespace label platform.io/tenant must be a canonical tenant ID (APP-<number>-UC<nn>), got: ' + variables.tenantId"
+    - expression: >-
+        variables.sbTriggers.all(t, has(t.authenticationRef) &&
+        (!has(t.authenticationRef.kind) || t.authenticationRef.kind == 'TriggerAuthentication'))
+      message: "Service Bus triggers must use a namespaced TriggerAuthentication (no ClusterTriggerAuthentication)."
+    - expression: >-
+        variables.sbTriggers.all(t, !has(t.metadata) ||
+        (!('connectionFromEnv' in t.metadata) && !('connection' in t.metadata)))
+      message: "Service Bus triggers must not use connection strings."
+    - expression: >-
+        variables.sbTriggers.all(t, has(t.metadata) && 'namespace' in t.metadata &&
+        t.metadata['namespace'] in variables.approvedNamespaces)
+      messageExpression: "'Service Bus trigger namespace must be one of ' + variables.approvedNamespaces.join(', ') + ' (short name, not FQDN).'"
+    - expression: >-
+        variables.sbTriggers.all(t, !('useRegex' in t.metadata) || t.metadata['useRegex'] == 'false')
+      message: "useRegex is not allowed on Service Bus triggers."
+    - expression: >-
+        variables.sbTriggers.all(t,
+          ('queueName' in t.metadata && !('topicName' in t.metadata) && !('subscriptionName' in t.metadata) &&
+           t.metadata['queueName'].startsWith('q-' + variables.tenant + '-')) ||
+          ('topicName' in t.metadata && !('queueName' in t.metadata) &&
+           t.metadata['topicName'].startsWith('t-' + variables.tenant + '-') &&
+           'subscriptionName' in t.metadata && t.metadata['subscriptionName'].startsWith('sub-')))
+      messageExpression: >-
+        'Service Bus triggers must target q-' + variables.tenant + '-<purpose>, or t-' + variables.tenant +
+        '-<purpose> with a sub-<consumer> subscription.'
+    - expression: >-
+        variables.sbTriggers.all(t, !('messageCount' in t.metadata) ||
+        (int(t.metadata.messageCount) >= 1 && int(t.metadata.messageCount) <= variables.maxMessageCount))
+      messageExpression: "'messageCount must be between 1 and ' + string(variables.maxMessageCount) + '.'"
+    - expression: >-
+        variables.sbTriggers.all(t, !('activationMessageCount' in t.metadata) ||
+        int(t.metadata.activationMessageCount) >= 0)
+      message: "activationMessageCount must be zero or greater."
+    - expression: "has(object.spec.maxReplicaCount) && object.spec.maxReplicaCount <= variables.maxReplicaCap"
+      messageExpression: "'maxReplicaCount must be set explicitly and be <= ' + string(variables.maxReplicaCap) + ' (KEDA defaults to 100).'"
+    - expression: "!has(object.spec.minReplicaCount) || !has(object.spec.maxReplicaCount) || object.spec.minReplicaCount <= object.spec.maxReplicaCount"
+      message: "minReplicaCount must be <= maxReplicaCount."
+    - expression: "!has(object.spec.pollingInterval) || object.spec.pollingInterval >= variables.minPollingInterval"
+      messageExpression: "'pollingInterval must be >= ' + string(variables.minPollingInterval) + ' seconds.'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: keda-tenant-scaling
+spec:
+  policyName: keda-tenant-scaling
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchExpressions:
+        - key: platform.io/tenant
+          operator: Exists

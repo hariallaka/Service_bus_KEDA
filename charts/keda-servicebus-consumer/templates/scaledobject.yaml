@@ -1,0 +1,29 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ include "keda-servicebus-consumer.scaledObjectName" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    name: {{ .Values.workload.deploymentName }}
+  minReplicaCount: {{ .Values.scaling.minReplicaCount }}
+  maxReplicaCount: {{ .Values.scaling.maxReplicaCount }}
+  pollingInterval: {{ .Values.scaling.pollingIntervalSeconds }}
+  cooldownPeriod: {{ .Values.scaling.cooldownPeriodSeconds }}
+  triggers:
+    - type: azure-servicebus
+      metadata:
+        namespace: {{ .Values.serviceBus.namespace | quote }}
+        {{- if eq .Values.serviceBus.entityType "queue" }}
+        queueName: {{ .Values.serviceBus.queueName | quote }}
+        {{- else }}
+        topicName: {{ .Values.serviceBus.topicName | quote }}
+        subscriptionName: {{ .Values.serviceBus.subscriptionName | quote }}
+        {{- end }}
+        messageCount: {{ .Values.scaling.messageCount | quote }}
+        activationMessageCount: {{ .Values.scaling.activationMessageCount | quote }}
+      authenticationRef:
+        name: {{ include "keda-servicebus-consumer.triggerAuthName" . }}
+        kind: TriggerAuthentication

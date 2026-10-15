@@ -1,0 +1,10 @@
+apiVersion: v2
+name: keda-servicebus-consumer
+description: >
+  Per-tenant KEDA ScaledObject + TriggerAuthentication + namespace/identity
+  binding for a Service Bus queue or topic-subscription consumer on a
+  multi-tenant AKS cluster.
+  Does not create the AKS cluster or any Service Bus namespace/entity.
+type: application
+version: 0.3.0
+appVersion: "1.0.0"

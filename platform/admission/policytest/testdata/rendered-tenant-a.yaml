@@ -1,0 +1,208 @@
+---
+# Source: keda-servicebus-consumer/templates/networkpolicy.yaml
+# Default-deny for the tenant namespace, then explicit allows for DNS, Entra
+# ID (token exchange) and Service Bus. See README section 2.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-1234-uc01-default-deny
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress: []
+---
+# Source: keda-servicebus-consumer/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-1234-uc01-allow-dns
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # Cluster DNS only, not port 53 on every pod in every namespace.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Source: keda-servicebus-consumer/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-1234-uc01-allow-servicebus-egress
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: "10.20.4.0/27"
+      # TLS only: AMQP over TLS (5671) and AMQP-over-WebSockets/HTTPS (443).
+      # Plain AMQP (5672) is not allowed.
+      ports:
+        - protocol: TCP
+          port: 5671
+        - protocol: TCP
+          port: 443
+---
+# Source: keda-servicebus-consumer/templates/networkpolicy.yaml
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: app-1234-uc01-allow-entra-id-egress
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 100.64.0.0/10
+      ports:
+        - protocol: TCP
+          port: 443
+---
+# Source: keda-servicebus-consumer/templates/deployment.yaml
+# Placeholder consumer Deployment so the ScaledObject has something to scale
+# end-to-end (see scripts/verify-keda-scaling.sh). Replace workload.image
+# with your real consumer. Runs as the tenant's pre-existing ServiceAccount;
+# the azure.workload.identity/use label makes the AKS workload identity
+# webhook inject that ServiceAccount's federated token and AZURE_CLIENT_ID.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-worker
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+    app: orders-worker
+spec:
+  # replicas is deliberately omitted: KEDA/HPA owns it, and setting it here
+  # would reset the replica count on every helm upgrade.
+  selector:
+    matchLabels:
+      app: orders-worker
+  template:
+    metadata:
+      labels:
+        app: orders-worker
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: sb-consumer-sa
+      # The workload identity webhook mounts its own projected token; the
+      # Kubernetes API token isn't needed by a Service Bus consumer.
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: consumer
+          image: myregistry.azurecr.io/app-1234/orders-worker:1.0.0
+          env:
+            - name: SERVICEBUS_FQDN
+              value: "sb-daas.servicebus.windows.net"
+            - name: SERVICEBUS_QUEUE_NAME
+              value: "q-app-1234-uc01-orders"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+---
+# Source: keda-servicebus-consumer/templates/scaledobject.yaml
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: so-orders-worker
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+spec:
+  scaleTargetRef:
+    name: orders-worker
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  pollingInterval: 30
+  cooldownPeriod: 300
+  triggers:
+    - type: azure-servicebus
+      metadata:
+        namespace: "sb-daas"
+        queueName: "q-app-1234-uc01-orders"
+        messageCount: "10"
+        activationMessageCount: "0"
+      authenticationRef:
+        name: ta-orders-worker
+        kind: TriggerAuthentication
+---
+# Source: keda-servicebus-consumer/templates/triggerauthentication.yaml
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: ta-orders-worker
+  namespace: tenant-app-1234-uc01
+  labels:
+    app.kubernetes.io/name: keda-servicebus-consumer
+    app.kubernetes.io/instance: app-1234-uc01-orders
+    tenant: APP-1234-UC01
+spec:
+  podIdentity:
+    provider: azure-workload
+    # KEDA's azure-workload provider always authenticates as the
+    # keda-operator ServiceAccount (identityOwner is an AWS-only field and
+    # is ignored here). identityId makes the operator request a token for
+    # the tenant's own identity, which is scoped to this tenant's entity
+    # only. Requires the tenant identity to have a federated credential for
+    # system:serviceaccount:keda:keda-operator (terraform/tenant-keda-identity).
+    identityId: "00000000-0000-0000-0000-00000000000a"

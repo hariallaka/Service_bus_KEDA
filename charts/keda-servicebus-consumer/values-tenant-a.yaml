@@ -1,0 +1,38 @@
+# Example tenant APP-1234-UC01 consuming a queue. Assumes onboarding created
+# namespace tenant-app-1234-uc01 (labeled platform.io/tenant=APP-1234-UC01,
+# annotated with the identity client ID) and ServiceAccount sb-consumer-sa,
+# that terraform/tenant-keda-identity added the KEDA trust to the tenant
+# identity (identity.clientId below is its client_id output), and that
+# terraform/servicebus-tenant created q-app-1234-uc01-orders plus its role
+# assignment.
+#   helm upgrade --install app-1234-uc01-orders . -f values-tenant-a.yaml
+
+tenant:
+  id: APP-1234-UC01
+
+namespace: tenant-app-1234-uc01
+
+serviceAccount:
+  name: sb-consumer-sa
+
+identity:
+  clientId: "00000000-0000-0000-0000-00000000000a"
+
+serviceBus:
+  namespace: sb-daas
+  entityType: queue
+  queueName: q-app-1234-uc01-orders
+
+scaling:
+  messageCount: 10
+  minReplicaCount: 1
+  maxReplicaCount: 20
+
+workload:
+  create: true
+  deploymentName: orders-worker
+  image: "myregistry.azurecr.io/app-1234/orders-worker:1.0.0"
+
+networkPolicy:
+  serviceBusEgressCIDRs:
+    - 10.20.4.0/27

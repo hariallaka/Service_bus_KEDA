@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["tenant", "namespace", "serviceAccount", "identity", "serviceBus", "scaling", "platformLimits", "workload", "networkPolicy"],
+  "properties": {
+    "tenant": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^APP-[0-9]{1,8}-UC[0-9]{2}$" }
+      }
+    },
+    "namespace": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$", "maxLength": 63 },
+    "serviceAccount": {
+      "type": "object",
+      "required": ["name"],
+      "properties": { "name": { "type": "string", "minLength": 1 } }
+    },
+    "identity": {
+      "type": "object",
+      "required": ["clientId"],
+      "properties": {
+        "clientId": { "type": "string", "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$" }
+      }
+    },
+    "serviceBus": {
+      "type": "object",
+      "required": ["namespace", "entityType"],
+      "properties": {
+        "namespace": { "type": "string", "pattern": "^[a-zA-Z][a-zA-Z0-9-]{4,48}[a-zA-Z0-9]$" },
+        "entityType": { "enum": ["queue", "topic"] },
+        "queueName": { "type": "string" },
+        "topicName": { "type": "string" },
+        "subscriptionName": { "type": "string", "maxLength": 50 }
+      }
+    },
+    "keda": {
+      "type": "object",
+      "properties": {
+        "scaledObjectName": { "type": "string" },
+        "triggerAuthenticationName": { "type": "string" }
+      }
+    },
+    "scaling": {
+      "type": "object",
+      "required": ["messageCount", "activationMessageCount", "minReplicaCount", "maxReplicaCount", "pollingIntervalSeconds", "cooldownPeriodSeconds"],
+      "properties": {
+        "messageCount": { "type": "integer", "minimum": 1 },
+        "activationMessageCount": { "type": "integer", "minimum": 0 },
+        "minReplicaCount": { "type": "integer", "minimum": 0 },
+        "maxReplicaCount": { "type": "integer", "minimum": 1 },
+        "pollingIntervalSeconds": { "type": "integer", "minimum": 1 },
+        "cooldownPeriodSeconds": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "platformLimits": {
+      "type": "object",
+      "required": ["maxReplicaCap", "maxMessageCount", "minPollingIntervalSeconds"],
+      "properties": {
+        "maxReplicaCap": { "type": "integer", "minimum": 1 },
+        "maxMessageCount": { "type": "integer", "minimum": 1 },
+        "minPollingIntervalSeconds": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "required": ["create", "deploymentName"],
+      "properties": {
+        "create": { "type": "boolean" },
+        "deploymentName": { "type": "string", "minLength": 1 },
+        "image": { "type": "string" }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "serviceBusEgressCIDRs": { "type": "array", "items": { "type": "string" } },
+        "allowPublicServiceBusEgress": { "type": "boolean" },
+        "allowEntraIdEgress": { "type": "boolean" },
+        "privateRanges": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{{- include "keda-servicebus-consumer.validate" . }}
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: {{ include "keda-servicebus-consumer.triggerAuthName" . }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "keda-servicebus-consumer.labels" . | nindent 4 }}
+spec:
+  podIdentity:
+    provider: azure-workload
+    # KEDA's azure-workload provider always authenticates as the
+    # keda-operator ServiceAccount (identityOwner is an AWS-only field and
+    # is ignored here). identityId makes the operator request a token for
+    # the tenant's own identity, which is scoped to this tenant's entity
+    # only. Requires the tenant identity to have a federated credential for
+    # system:serviceaccount:keda:keda-operator (terraform/tenant-keda-identity).
+    identityId: {{ .Values.identity.clientId | quote }}
