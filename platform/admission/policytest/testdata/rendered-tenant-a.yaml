@@ -65,7 +65,7 @@ spec:
   egress:
     - to:
         - ipBlock:
-            cidr: "10.20.4.0/27"
+            cidr: "192.0.2.0/27"
       # TLS only: AMQP over TLS (5671) and AMQP-over-WebSockets/HTTPS (443).
       # Plain AMQP (5672) is not allowed.
       ports:

@@ -34,5 +34,7 @@ workload:
   image: "myregistry.azurecr.io/app-1234/orders-worker:1.0.0"
 
 networkPolicy:
+  # Dummy documentation range (RFC 5737). Replace with the CIDR of your
+  # Service Bus private endpoint subnet.
   serviceBusEgressCIDRs:
-    - 10.20.4.0/27
+    - 192.0.2.0/27
