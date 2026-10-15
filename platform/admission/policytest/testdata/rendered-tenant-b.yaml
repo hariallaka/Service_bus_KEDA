@@ -142,7 +142,7 @@ spec:
           image: myregistry.azurecr.io/app-5678/billing-worker:1.0.0
           env:
             - name: SERVICEBUS_FQDN
-              value: "sb-daas.servicebus.windows.net"
+              value: "sb-example-shared.servicebus.windows.net"
             - name: SERVICEBUS_TOPIC_NAME
               value: "t-app-5678-uc02-events"
             - name: SERVICEBUS_SUBSCRIPTION_NAME
@@ -180,7 +180,7 @@ spec:
   triggers:
     - type: azure-servicebus
       metadata:
-        namespace: "sb-daas"
+        namespace: "sb-example-shared"
         topicName: "t-app-5678-uc02-events"
         subscriptionName: "sub-billing-worker"
         messageCount: "10"

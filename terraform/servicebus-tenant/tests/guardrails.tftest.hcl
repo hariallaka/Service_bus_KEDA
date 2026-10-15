@@ -6,8 +6,8 @@ mock_provider "azurerm" {}
 variables {
   tenant_id                         = "APP-1234-UC01"
   purpose                           = "orders"
-  servicebus_namespace_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas"
-  approved_servicebus_namespace_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas"]
+  servicebus_namespace_id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared"
+  approved_servicebus_namespace_ids = ["/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared"]
   access_grants = {
     worker = { principal_id = "11111111-1111-1111-1111-111111111111", access_mode = "receiver" }
   }
@@ -21,7 +21,7 @@ run "queue_receiver_scoped_to_queue" {
     error_message = "queue name must follow q-<tenant>-<purpose>"
   }
   assert {
-    condition     = output.keda_trigger_metadata.namespace == "sb-daas"
+    condition     = output.keda_trigger_metadata.namespace == "sb-example-shared"
     error_message = "KEDA namespace must be the short name"
   }
   assert {

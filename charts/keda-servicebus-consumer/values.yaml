@@ -33,7 +33,7 @@ identity:
   clientId: "REPLACE_ME"
 
 serviceBus:
-  # Short namespace name, e.g. sb-daas. NOT the FQDN: KEDA appends the
+  # Short namespace name, e.g. sb-example-shared. NOT the FQDN: KEDA appends the
   # endpoint suffix itself (<namespace>.servicebus.windows.net).
   namespace: "REPLACE_ME"
   # queue | topic

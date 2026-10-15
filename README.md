@@ -1,7 +1,7 @@
 # KEDA + Azure Service Bus on AKS (multi-tenant, shared landing zone)
 
 This module onboards tenants onto a **shared Azure Service Bus Premium
-namespace** (e.g. `sb-daas`) in the landing zone and makes **KEDA scale
+namespace** (e.g. `sb-example-shared`) in the landing zone and makes **KEDA scale
 their AKS workloads on Service Bus backlog**, with isolation between
 tenants enforced at every layer:
 
@@ -99,7 +99,7 @@ flowchart LR
         UAMIA[UAMI APP-1234-UC01]
     end
 
-    subgraph SB["Service Bus sb-daas"]
+    subgraph SB["Service Bus sb-example-shared"]
         QA[(q-app-1234-uc01-orders)]
     end
 
@@ -146,7 +146,7 @@ flowchart LR
         UAMIA[UAMI APP-1234-UC01<br/>FIC 1: tenant-app-1234-uc01/sb-consumer-sa<br/>FIC 2: keda/keda-operator]
     end
 
-    subgraph SB["Service Bus Premium sb-daas<br/>local auth off, private endpoint"]
+    subgraph SB["Service Bus Premium sb-example-shared<br/>local auth off, private endpoint"]
         QA[(q-app-1234-uc01-orders<br/>Data Receiver: UAMI APP-1234-UC01)]
     end
 
@@ -298,9 +298,9 @@ admission policy rejects secret-based KEDA auth.
 ## 4. How KEDA drives scale-out
 
 1. A `ScaledObject` points at the tenant Deployment and declares an
-   `azure-servicebus` trigger with `namespace: sb-daas` (**short name**:
+   `azure-servicebus` trigger with `namespace: sb-example-shared` (**short name**:
    KEDA appends `.servicebus.windows.net` itself, so an FQDN here produces
-   `sb-daas.servicebus.windows.net.servicebus.windows.net`) and either
+   `sb-example-shared.servicebus.windows.net.servicebus.windows.net`) and either
    `queueName`, or `topicName` + `subscriptionName`.
 2. KEDA creates an HPA with an external metric. Every `pollingInterval`
    (default 30s, minimum 15s by policy) it reads the entity's
@@ -388,8 +388,8 @@ cat > app-1234-uc01-orders.tfvars <<'EOF'
 tenant_id                         = "APP-1234-UC01"
 purpose                           = "orders"
 entity_type                       = "queue"
-servicebus_namespace_id           = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ServiceBus/namespaces/sb-daas"
-approved_servicebus_namespace_ids = ["/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ServiceBus/namespaces/sb-daas"]
+servicebus_namespace_id           = "/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ServiceBus/namespaces/sb-example-shared"
+approved_servicebus_namespace_ids = ["/subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.ServiceBus/namespaces/sb-example-shared"]
 lock_duration_seconds             = 60
 access_grants = {
   # The tenant identity must hold the receive grant: KEDA reads queue
@@ -405,7 +405,7 @@ helm upgrade --install app-1234-uc01-orders . -f values-tenant-a.yaml
 
 # 4. Live verification
 cd ../../scripts
-./verify-keda-scaling.sh -n tenant-app-1234-uc01 -d orders-worker -s sb-daas.servicebus.windows.net -q q-app-1234-uc01-orders -c 20
+./verify-keda-scaling.sh -n tenant-app-1234-uc01 -d orders-worker -s sb-example-shared.servicebus.windows.net -q q-app-1234-uc01-orders -c 20
 ```
 
 ## 8. Tests and CI

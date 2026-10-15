@@ -18,7 +18,7 @@ Usage:
         --count 20
 
     python3 send-test-messages.py \
-        --namespace-fqdn sb-daas.servicebus.windows.net \
+        --namespace-fqdn sb-example-shared.servicebus.windows.net \
         --topic-name t-app-5678-uc02-events \
         --count 20
 """

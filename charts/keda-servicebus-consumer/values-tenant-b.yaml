@@ -15,7 +15,7 @@ identity:
   clientId: "00000000-0000-0000-0000-00000000000b"
 
 serviceBus:
-  namespace: sb-daas
+  namespace: sb-example-shared
   entityType: topic
   topicName: t-app-5678-uc02-events
   subscriptionName: sub-billing-worker

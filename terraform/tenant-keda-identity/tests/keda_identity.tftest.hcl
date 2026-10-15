@@ -53,7 +53,7 @@ run "custom_keda_install" {
 run "rejects_non_identity_resource" {
   command = plan
   variables {
-    workload_identity_resource_id = "/subscriptions/0/resourceGroups/rg/providers/Microsoft.ServiceBus/namespaces/sb-daas"
+    workload_identity_resource_id = "/subscriptions/0/resourceGroups/rg/providers/Microsoft.ServiceBus/namespaces/sb-example-shared"
   }
   expect_failures = [var.workload_identity_resource_id]
 }

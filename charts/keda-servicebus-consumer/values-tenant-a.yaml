@@ -19,7 +19,7 @@ identity:
   clientId: "00000000-0000-0000-0000-00000000000a"
 
 serviceBus:
-  namespace: sb-daas
+  namespace: sb-example-shared
   entityType: queue
   queueName: q-app-1234-uc01-orders
 

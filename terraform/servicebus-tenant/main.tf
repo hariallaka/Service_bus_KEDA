@@ -18,7 +18,7 @@ provider "azurerm" {
 #     (user-assigned managed identity + federated identity credential for the
 #     workload's ServiceAccount) are provisioned by tenant onboarding and are
 #     consumed here only as inputs.
-#   - The shared Premium Service Bus namespace (e.g. sb-daas) is provisioned
+#   - The shared Premium Service Bus namespace (e.g. sb-example-shared) is provisioned
 #     by the landing zone, with local (SAS) auth disabled and private
 #     networking. It is referenced by ID only.
 #   - This module creates one tenant entity (queue, or topic + subscriptions)

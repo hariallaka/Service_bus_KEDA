@@ -19,7 +19,7 @@ END $$;
 
 INSERT INTO sb_platform_limits VALUES ('prod', 50, 1000, 15, DEFAULT);
 INSERT INTO sb_approved_namespace VALUES
-  ('sb-daas', 'prod', '/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas', 'Premium', true, true);
+  ('sb-example-shared', 'prod', '/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared', 'Premium', true, true);
 
 -- Namespace hardening
 SELECT pg_temp.expect_error($$INSERT INTO sb_approved_namespace VALUES ('sb-std1', 'prod', '/subscriptions/0/resourceGroups/r/providers/Microsoft.ServiceBus/namespaces/sb-std1', 'Standard', true, true)$$, 'sb_approved_namespace_sku_check');
@@ -27,8 +27,8 @@ SELECT pg_temp.expect_error($$INSERT INTO sb_approved_namespace VALUES ('sb-sas1
 
 -- Valid queue + topic
 INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds)
-VALUES (1, 'APP-1234-UC01', 'orders', 'prod', 'sb-daas', 'queue', 1024, 60),
-       (2, 'APP-5678-UC02', 'events', 'prod', 'sb-daas', 'topic', 2048, 30);
+VALUES (1, 'APP-1234-UC01', 'orders', 'prod', 'sb-example-shared', 'queue', 1024, 60),
+       (2, 'APP-5678-UC02', 'events', 'prod', 'sb-example-shared', 'topic', 2048, 30);
 
 DO $$ BEGIN
   ASSERT (SELECT entity_name FROM sb_entity WHERE id = 1) = 'q-app-1234-uc01-orders';
@@ -37,13 +37,13 @@ END $$;
 
 -- Entity rules
 SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC01', 'orders', 'prod', 'sb-rogue', 'queue', 1024, 60)$$, 'foreign key');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'acme', 'orders', 'prod', 'sb-daas', 'queue', 1024, 60)$$, 'sb_entity_tenant_id_check');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'app-1234-uc01', 'orders', 'prod', 'sb-daas', 'queue', 1024, 60)$$, 'sb_entity_tenant_id_check');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC1', 'orders', 'prod', 'sb-daas', 'queue', 1024, 60)$$, 'sb_entity_tenant_id_check');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (9, 'APP-1234-UC01', 'orders', 'prod', 'sb-daas', 'queue', 1024, 60)$$, 'sb_entity_active_name_uq');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC01', 'big', 'prod', 'sb-daas', 'queue', 10240, 60)$$, 'not an approved size');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC01', 'slow', 'prod', 'sb-daas', 'queue', 1024, 600)$$, 'lock_duration_seconds_check');
-SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds, entity_name) VALUES (3, 'APP-1234-UC01', 'x', 'prod', 'sb-daas', 'queue', 1024, 60, 'q-app-5678-uc02-x')$$, 'non-DEFAULT value');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'acme', 'orders', 'prod', 'sb-example-shared', 'queue', 1024, 60)$$, 'sb_entity_tenant_id_check');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'app-1234-uc01', 'orders', 'prod', 'sb-example-shared', 'queue', 1024, 60)$$, 'sb_entity_tenant_id_check');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC1', 'orders', 'prod', 'sb-example-shared', 'queue', 1024, 60)$$, 'sb_entity_tenant_id_check');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (9, 'APP-1234-UC01', 'orders', 'prod', 'sb-example-shared', 'queue', 1024, 60)$$, 'sb_entity_active_name_uq');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC01', 'big', 'prod', 'sb-example-shared', 'queue', 10240, 60)$$, 'not an approved size');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds) VALUES (3, 'APP-1234-UC01', 'slow', 'prod', 'sb-example-shared', 'queue', 1024, 600)$$, 'lock_duration_seconds_check');
+SELECT pg_temp.expect_error($$INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds, entity_name) VALUES (3, 'APP-1234-UC01', 'x', 'prod', 'sb-example-shared', 'queue', 1024, 60, 'q-app-5678-uc02-x')$$, 'non-DEFAULT value');
 
 -- Subscriptions: only on topics
 INSERT INTO sb_subscription (entity_id, consumer) VALUES (2, 'billing-worker');
@@ -52,17 +52,17 @@ SELECT pg_temp.expect_error($$INSERT INTO sb_subscription (entity_id, consumer) 
 -- Grants and computed RBAC scopes
 INSERT INTO sb_access_grant (entity_id, access_mode, workload_identity_principal_id, workload_identity_client_id, k8s_namespace, service_account, rbac_scopes)
 VALUES (1, 'receiver', '11111111-1111-1111-1111-111111111111', 'aaaaaaaa-0000-0000-0000-00000000000a', 'tenant-app-1234-uc01', 'sb-consumer-sa',
-        '{/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas}');  -- tampered scope is overwritten
+        '{/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared}');  -- tampered scope is overwritten
 INSERT INTO sb_access_grant (entity_id, subscription_id, access_mode, workload_identity_principal_id, workload_identity_client_id, k8s_namespace, service_account)
 VALUES (2, 1, 'sender_receiver', '22222222-2222-2222-2222-222222222222', 'bbbbbbbb-0000-0000-0000-00000000000b', 'tenant-app-5678-uc02', 'sb-consumer-sa');
 
 DO $$ BEGIN
   ASSERT (SELECT rbac_scopes FROM sb_access_grant WHERE id = 1)
-       = ARRAY['/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas/queues/q-app-1234-uc01-orders'],
+       = ARRAY['/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared/queues/q-app-1234-uc01-orders'],
        'queue receiver must be scoped to the queue, caller-supplied scope ignored';
   ASSERT (SELECT rbac_scopes FROM sb_access_grant WHERE id = 2)
-       = ARRAY['/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas/topics/t-app-5678-uc02-events',
-               '/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-daas/topics/t-app-5678-uc02-events/subscriptions/sub-billing-worker'],
+       = ARRAY['/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared/topics/t-app-5678-uc02-events',
+               '/subscriptions/0000/resourceGroups/rg-lz/providers/Microsoft.ServiceBus/namespaces/sb-example-shared/topics/t-app-5678-uc02-events/subscriptions/sub-billing-worker'],
        'topic sender_receiver must send at topic scope and receive at subscription scope';
 END $$;
 
@@ -99,7 +99,7 @@ END $$;
 SELECT pg_temp.expect_error($$UPDATE sb_entity SET lock_duration_seconds = 30 WHERE id = 1$$, 'retired and immutable');
 -- ...and the name can be reused by a new active owner.
 INSERT INTO sb_entity (service_id, tenant_id, purpose, environment, service_bus_namespace, entity_type, max_size_mb, lock_duration_seconds)
-VALUES (5, 'APP-1234-UC01', 'orders', 'prod', 'sb-daas', 'queue', 1024, 60);
+VALUES (5, 'APP-1234-UC01', 'orders', 'prod', 'sb-example-shared', 'queue', 1024, 60);
 
 -- Audit captured old/new values and the actor
 DO $$ BEGIN

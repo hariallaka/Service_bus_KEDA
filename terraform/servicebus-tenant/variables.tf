@@ -44,7 +44,7 @@ variable "entity_type" {
 # ---------------------------------------------------------------------------
 
 variable "servicebus_namespace_id" {
-  description = "ARM resource ID of the shared Service Bus Premium namespace (e.g. sb-daas). Not created or read by this module: reading it via the azurerm_servicebus_namespace data source would copy the namespace's SAS connection strings into Terraform state."
+  description = "ARM resource ID of the shared Service Bus Premium namespace (e.g. sb-example-shared). Not created or read by this module: reading it via the azurerm_servicebus_namespace data source would copy the namespace's SAS connection strings into Terraform state."
   type        = string
 
   validation {

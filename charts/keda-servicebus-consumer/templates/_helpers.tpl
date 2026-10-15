@@ -27,7 +27,7 @@ fails with a clear message instead of producing an unsafe manifest.
 {{- $s := .Values.scaling -}}
 {{- $l := .Values.platformLimits -}}
 {{- if contains "." $sb.namespace -}}
-{{- fail "serviceBus.namespace must be the short namespace name (e.g. sb-daas), not the FQDN: KEDA appends the endpoint suffix itself" -}}
+{{- fail "serviceBus.namespace must be the short namespace name (e.g. sb-example-shared), not the FQDN: KEDA appends the endpoint suffix itself" -}}
 {{- end -}}
 {{- if eq $sb.entityType "queue" -}}
 {{- if not (hasPrefix (printf "q-%s-" $t) $sb.queueName) -}}

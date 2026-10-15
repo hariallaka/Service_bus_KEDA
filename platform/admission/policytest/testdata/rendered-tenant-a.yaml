@@ -142,7 +142,7 @@ spec:
           image: myregistry.azurecr.io/app-1234/orders-worker:1.0.0
           env:
             - name: SERVICEBUS_FQDN
-              value: "sb-daas.servicebus.windows.net"
+              value: "sb-example-shared.servicebus.windows.net"
             - name: SERVICEBUS_QUEUE_NAME
               value: "q-app-1234-uc01-orders"
           securityContext:
@@ -178,7 +178,7 @@ spec:
   triggers:
     - type: azure-servicebus
       metadata:
-        namespace: "sb-daas"
+        namespace: "sb-example-shared"
         queueName: "q-app-1234-uc01-orders"
         messageCount: "10"
         activationMessageCount: "0"

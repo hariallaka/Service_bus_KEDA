@@ -95,7 +95,7 @@ spec:
     - name: tenant
       expression: "variables.tenantId.lowerAscii()"
     - name: approvedNamespaces
-      expression: "['sb-daas']"
+      expression: "['sb-example-shared']"
     - name: maxReplicaCap
       expression: "50"
     - name: maxMessageCount

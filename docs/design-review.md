@@ -182,7 +182,7 @@ namespace, and throttling surfaces in KEDA as
 
 11. **`maxReplicaCount` must be mandatory.** KEDA defaults it to 100 when
     omitted.
-12. **The KEDA `namespace` field is the short name** (`sb-daas`, as in the
+12. **The KEDA `namespace` field is the short name** (`sb-example-shared`, as in the
     design's examples). State it explicitly: an FQDN there produces a
     broken endpoint, and the repo had exactly this bug.
 13. **Sessions:** effective parallelism equals the number of active

@@ -236,7 +236,7 @@ spec:
   triggers:
     - type: azure-servicebus
       authenticationRef: {name: ta}
-      metadata: {namespace: sb-daas, queueName: q-app-5678-uc02-orders}`)
+      metadata: {namespace: sb-example-shared, queueName: q-app-5678-uc02-orders}`)
 	for _, label := range []string{"APP", "app-1234-uc01", "APP-1234-UC1"} {
 		msg := admit(t, p, obj, ns("tenant-x", label, "00000000-0000-0000-0000-00000000000a"))
 		if !strings.Contains(msg, "canonical tenant ID") {
@@ -261,27 +261,27 @@ spec:
 		obj  string
 		want string
 	}{
-		"other tenant's queue":        {base(`{namespace: sb-daas, queueName: q-app-5678-uc02-orders}`, ""), "must target q-app-1234-uc01-"},
-		"same app, other use case":    {base(`{namespace: sb-daas, queueName: q-app-1234-uc02-orders}`, ""), "must target q-app-1234-uc01-"},
-		"longer app number prefix":    {base(`{namespace: sb-daas, queueName: q-app-12345-uc01-orders}`, ""), "must target q-app-1234-uc01-"},
-		"topic without subscription":  {base(`{namespace: sb-daas, topicName: t-app-1234-uc01-events}`, ""), "must target"},
-		"unapproved namespace":        {base(`{namespace: sb-rogue, queueName: q-app-1234-uc01-orders}`, ""), "must be one of sb-daas"},
-		"FQDN instead of short name":  {base(`{namespace: sb-daas.servicebus.windows.net, queueName: q-app-1234-uc01-orders}`, ""), "short name"},
-		"connection string from env":  {base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders, connectionFromEnv: SB_CONN}`, ""), "connection strings"},
-		"regex across queues":         {base(`{namespace: sb-daas, queueName: "q-app-1234-uc01-.*", useRegex: "true"}`, ""), "useRegex"},
-		"messageCount above cap":      {base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders, messageCount: "5000"}`, ""), "messageCount"},
-		"messageCount not a number":   {base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders, messageCount: "lots"}`, ""), "error"},
-		"replica cap exceeded":        {strings.Replace(base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders}`, ""), "maxReplicaCount: 10", "maxReplicaCount: 500", 1), "maxReplicaCount"},
-		"min above max":               {base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders}`, "  minReplicaCount: 20"), "minReplicaCount"},
-		"polling too aggressive":      {base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders}`, "  pollingInterval: 1"), "pollingInterval"},
-		"max replicas left unbounded": {strings.Replace(base(`{namespace: sb-daas, queueName: q-app-1234-uc01-orders}`, ""), "maxReplicaCount: 10", "", 1), "maxReplicaCount"},
+		"other tenant's queue":        {base(`{namespace: sb-example-shared, queueName: q-app-5678-uc02-orders}`, ""), "must target q-app-1234-uc01-"},
+		"same app, other use case":    {base(`{namespace: sb-example-shared, queueName: q-app-1234-uc02-orders}`, ""), "must target q-app-1234-uc01-"},
+		"longer app number prefix":    {base(`{namespace: sb-example-shared, queueName: q-app-12345-uc01-orders}`, ""), "must target q-app-1234-uc01-"},
+		"topic without subscription":  {base(`{namespace: sb-example-shared, topicName: t-app-1234-uc01-events}`, ""), "must target"},
+		"unapproved namespace":        {base(`{namespace: sb-rogue, queueName: q-app-1234-uc01-orders}`, ""), "must be one of sb-example-shared"},
+		"FQDN instead of short name":  {base(`{namespace: sb-example-shared.servicebus.windows.net, queueName: q-app-1234-uc01-orders}`, ""), "short name"},
+		"connection string from env":  {base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders, connectionFromEnv: SB_CONN}`, ""), "connection strings"},
+		"regex across queues":         {base(`{namespace: sb-example-shared, queueName: "q-app-1234-uc01-.*", useRegex: "true"}`, ""), "useRegex"},
+		"messageCount above cap":      {base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders, messageCount: "5000"}`, ""), "messageCount"},
+		"messageCount not a number":   {base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders, messageCount: "lots"}`, ""), "error"},
+		"replica cap exceeded":        {strings.Replace(base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders}`, ""), "maxReplicaCount: 10", "maxReplicaCount: 500", 1), "maxReplicaCount"},
+		"min above max":               {base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders}`, "  minReplicaCount: 20"), "minReplicaCount"},
+		"polling too aggressive":      {base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders}`, "  pollingInterval: 1"), "pollingInterval"},
+		"max replicas left unbounded": {strings.Replace(base(`{namespace: sb-example-shared, queueName: q-app-1234-uc01-orders}`, ""), "maxReplicaCount: 10", "", 1), "maxReplicaCount"},
 		"cluster trigger auth": {`
 spec:
   maxReplicaCount: 10
   triggers:
     - type: azure-servicebus
       authenticationRef: {name: shared, kind: ClusterTriggerAuthentication}
-      metadata: {namespace: sb-daas, queueName: q-app-1234-uc01-orders}`, "ClusterTriggerAuthentication"},
+      metadata: {namespace: sb-example-shared, queueName: q-app-1234-uc01-orders}`, "ClusterTriggerAuthentication"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
